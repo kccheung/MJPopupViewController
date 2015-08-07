@@ -12,6 +12,8 @@
 #import <objc/runtime.h>
 
 #define kPopupModalAnimationDuration 0.35
+#define kMJShouldShowBackground @"kMJShouldShowBackground"
+#define kMJCouldDismissBackground @"kMJCouldDismissBackground"
 #define kMJPopupViewController @"kMJPopupViewController"
 #define kMJPopupBackgroundView @"kMJPopupBackgroundView"
 #define kMJSourceViewTag 23941
@@ -19,6 +21,7 @@
 #define kMJOverlayViewTag 23945
 
 @interface UIViewController (MJPopupViewControllerPrivate)
+
 - (UIView *)topView;
 - (void)presentPopupView:(UIView *)popupView;
 @end
@@ -32,6 +35,28 @@ static NSString *MJPopupViewDismissedKey = @"MJPopupViewDismissed";
 @implementation UIViewController (MJPopupViewController)
 
 static void *const keypath = (void *)&keypath;
+
+- (void)setCouldDismissBackground:(BOOL)couldDismissBackground
+{
+    objc_setAssociatedObject(self, kMJCouldDismissBackground, @(couldDismissBackground), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+- (BOOL)couldDismissBackground
+{
+    NSNumber *couldDimissBackgroundNumber = objc_getAssociatedObject(self, kMJCouldDismissBackground);
+    return [couldDimissBackgroundNumber boolValue];
+}
+
+- (void)setShouldShowBackground:(BOOL)shouldShowBackground
+{
+    objc_setAssociatedObject(self, kMJShouldShowBackground, @(shouldShowBackground), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+- (BOOL)shouldShowBackground
+{
+    NSNumber *shouldShowBackgroundNumber = objc_getAssociatedObject(self, kMJShouldShowBackground);
+    return [shouldShowBackgroundNumber boolValue];
+}
 
 - (UIViewController *)mj_popupViewController
 {
@@ -61,6 +86,15 @@ static void *const keypath = (void *)&keypath;
 
 - (void)presentPopupViewController:(UIViewController *)popupViewController animationType:(MJPopupViewAnimation)animationType
 {
+    self.shouldShowBackground = NO;
+    self.couldDismissBackground = YES;
+    [self presentPopupViewController:popupViewController animationType:animationType dismissed:nil];
+}
+
+- (void)presentPopupViewControllerWithBackgroundWithoutDismiss:(UIViewController *)popupViewController animationType:(MJPopupViewAnimation)animationType
+{
+    self.shouldShowBackground = YES;
+    self.couldDismissBackground = NO;
     [self presentPopupViewController:popupViewController animationType:animationType dismissed:nil];
 }
 
@@ -123,11 +157,13 @@ static void *const keypath = (void *)&keypath;
     overlayView.backgroundColor = [UIColor clearColor];
 
     // BackgroundView
-//    self.mj_popupBackgroundView = [[MJPopupBackgroundView alloc] initWithFrame:sourceView.bounds];
-//    self.mj_popupBackgroundView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-//    self.mj_popupBackgroundView.backgroundColor = [UIColor clearColor];
-//    self.mj_popupBackgroundView.alpha = 0.0f;
-//    [overlayView addSubview:self.mj_popupBackgroundView];
+    if (self.shouldShowBackground) {
+        self.mj_popupBackgroundView = [[MJPopupBackgroundView alloc] initWithFrame:sourceView.bounds];
+        self.mj_popupBackgroundView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        self.mj_popupBackgroundView.backgroundColor = [UIColor clearColor];
+        self.mj_popupBackgroundView.alpha = 0.0f;
+        [overlayView addSubview:self.mj_popupBackgroundView];
+    }
 
     // Make the Background Clickable
     UIButton *dismissButton = [UIButton buttonWithType:UIButtonTypeCustom];
@@ -178,6 +214,9 @@ static void *const keypath = (void *)&keypath;
 
 - (void)dismissPopupViewControllerWithanimation:(id)sender
 {
+    if (!self.couldDismissBackground) {
+        return;
+    }
     if ([sender isKindOfClass:[UIButton class]]) {
         UIButton *dismissButton = sender;
         switch (dismissButton.tag) {
